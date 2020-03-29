@@ -30,11 +30,11 @@
 #include "req-inl.h"
 
 static int uv__device_open(uv_loop_t* loop,
-                           uv_device_t* device,
-                           uv_os_fd_t fd,
+                           uv_device_t* handle,
+                           uv_os_fd_t deviceHandle,
                            int flags) {
   int uvflags = 0;
-  assert(device);
+  int err;
 
   if (flags == O_RDONLY)
     uvflags |= UV_HANDLE_READABLE;
@@ -43,37 +43,38 @@ static int uv__device_open(uv_loop_t* loop,
   else if (flags == O_RDWR)
     uvflags |= UV_HANDLE_READABLE | UV_HANDLE_WRITABLE;
  
-  memset(device, 0, sizeof(*device));
-  /* Try to associate with IOCP. */
-  if (!CreateIoCompletionPort(fd,
+  memset(handle, 0, sizeof(*handle));
+  if (CreateIoCompletionPort(deviceHandle,
                               loop->iocp,
-                              (ULONG_PTR) device,
-                              0)) {
-    DWORD err = GetLastError();
-    if (err)
-      return uv_translate_sys_error(err);
+                              (ULONG_PTR) handle,
+                              0) == NULL) {
+    err = GetLastError();
+    if (deviceHandle != INVALID_HANDLE_VALUE)
+        CloseHandle(deviceHandle);
+    return err;
   }
-  uv_stream_init(loop, (uv_stream_t*) device, UV_DEVICE);
-  uv_connection_init((uv_stream_t*) device);
-  device->handle = fd;
-  device->read_buffer.base = NULL;
-  device->read_buffer.len = 0;
-  device->flags |= uvflags;
+
+  uv_stream_init(loop, (uv_stream_t*) handle, UV_DEVICE);
+  uv_connection_init((uv_stream_t*) handle);
+  handle->handle = deviceHandle;
+  handle->read_buffer.base = NULL;
+  handle->read_buffer.len = 0;
+  handle->flags |= uvflags;
 
   return 0;
 }
 
 int uv_device_open(uv_loop_t* loop,
                     uv_device_t* device,
-                    uv_os_fd_t fd) {
-  return uv__device_open(loop, device, fd, O_RDWR);
+                    uv_os_fd_t deviceHandle) {
+  return uv__device_open(loop, device, deviceHandle, O_RDWR);
 }
 
 int uv_device_init(uv_loop_t* loop,
                    uv_device_t* device,
                    const char* path,
                    int flags) {
-  HANDLE* handle;
+  HANDLE* deviceHandle;
   DWORD dwCreationDisposition = 0;
 
   assert(device);
@@ -87,17 +88,18 @@ int uv_device_init(uv_loop_t* loop,
   else if (flags == O_RDWR)
     dwCreationDisposition |= (GENERIC_READ | GENERIC_WRITE);
 
-  handle = CreateFile(path,
+  deviceHandle = CreateFile(path,
                       dwCreationDisposition,
                       0,
                       NULL,
                       OPEN_EXISTING,
                       FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED,
                       0);
-  if (handle == INVALID_HANDLE_VALUE) {
+  if (deviceHandle == INVALID_HANDLE_VALUE) {
     return uv_translate_sys_error(GetLastError());
   }
-  return uv__device_open(loop, device, handle, flags);
+
+  return uv__device_open(loop, device, deviceHandle, flags);
 }
 
 int uv_device_ioctl(uv_device_t* device,
@@ -140,7 +142,7 @@ static void uv_device_queue_read(uv_loop_t* loop, uv_device_t* handle) {
 
   req = &handle->read_req;
   memset(&req->u.io.overlapped, 0, sizeof(req->u.io.overlapped));
-  handle->alloc_cb((uv_handle_t*) handle, 65536, &handle->read_buffer);
+  handle->alloc_cb((uv_handle_t*) handle, 128, &handle->read_buffer);
   if (handle->read_buffer.len == 0) {
     handle->read_cb((uv_stream_t*) handle, UV_ENOBUFS, &handle->read_buffer);
     return;
@@ -187,7 +189,7 @@ int uv_device_read_start(uv_device_t* handle,
     return 0;
 
   uv_device_queue_read(loop, handle);
-  return 0; 
+  return 0;
 }
 
 int uv_device_write(uv_loop_t* loop,
