@@ -14,6 +14,7 @@
         'task.h',
         'test-active.c',
         'test-async.c',
+        'test-async-multi.c',
         'test-async-null-cb.c',
         'test-callback-stack.c',
         'test-callback-order.c',
@@ -53,6 +54,7 @@
         'test-hrtime.c',
         'test-idle.c',
         'test-idna.c',
+        'test-ip4-addr.c',
         'test-ip6-addr.c',
         'test-ipc-heavy-traffic-deadlock-bug.c',
         'test-ipc-send-recv.c',
@@ -137,7 +139,9 @@
         'test-tmpdir.c',
         'test-mutexes.c',
         'test-thread.c',
+        'test-thread-affinity.c',
         'test-barrier.c',
+        'test-buf.c',
         'test-condvar.c',
         'test-timer-again.c',
         'test-timer-from-check.c',
@@ -160,8 +164,6 @@
         'test-udp-multicast-join6.c',
         'test-dlerror.c',
         'test-udp-multicast-ttl.c',
-        'test-ip4-addr.c',
-        'test-ip6-addr.c',
         'test-udp-multicast-interface.c',
         'test-udp-multicast-interface6.c',
         'test-udp-try-send.c',
@@ -171,8 +173,7 @@
         [ 'OS=="win"', {
           'sources': [
             'runner-win.c',
-            'runner-win.h',
-            '../src/win/snprintf.c',
+            'runner-win.h'
           ],
           'libraries': [ '-lws2_32' ]
         }, { # POSIX
@@ -206,10 +207,6 @@
             '_ALL_SOURCE',
             '_XOPEN_SOURCE=500',
           ],
-        }],
-        [ 'OS == "zos"', {
-          'cflags': [ '-qxplink' ],
-          'ldflags': [ '-qxplink' ],
         }],
         ['uv_library=="shared_library"', {
           'defines': [ 'USING_UV_SHARED=1' ],
@@ -261,8 +258,7 @@
         [ 'OS=="win"', {
           'sources': [
             'runner-win.c',
-            'runner-win.h',
-            '../src/win/snprintf.c',
+            'runner-win.h'
           ],
           'libraries': [ '-lws2_32' ]
         }, { # POSIX
@@ -271,10 +267,6 @@
             'runner-unix.c',
             'runner-unix.h',
           ]
-        }],
-        [ 'OS == "zos"', {
-          'cflags': [ '-qxplink' ],
-          'ldflags': [ '-qxplink' ],
         }],
         ['uv_library=="shared_library"', {
           'defines': [ 'USING_UV_SHARED=1' ],

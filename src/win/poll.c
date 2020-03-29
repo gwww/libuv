@@ -20,7 +20,6 @@
  */
 
 #include <assert.h>
-#include <io.h>
 
 #include "uv.h"
 #include "internal.h"
@@ -504,12 +503,7 @@ static int uv__slow_poll_close(uv_loop_t* loop, uv_poll_t* handle) {
 }
 
 
-int uv_poll_init(uv_loop_t* loop, uv_poll_t* handle, int fd) {
-  return uv_poll_init_socket(loop, handle, (SOCKET) uv__get_osfhandle(fd));
-}
-
-
-int uv_poll_init_socket(uv_loop_t* loop, uv_poll_t* handle,
+int uv_poll_init(uv_loop_t* loop, uv_poll_t* handle,
     uv_os_sock_t socket) {
   WSAPROTOCOL_INFOW protocol_info;
   int len;
@@ -521,10 +515,8 @@ int uv_poll_init_socket(uv_loop_t* loop, uv_poll_t* handle,
   if (ioctlsocket(socket, FIONBIO, &yes) == SOCKET_ERROR)
     return uv_translate_sys_error(WSAGetLastError());
 
-/* Try to obtain a base handle for the socket. This increases this chances that
- * we find an AFD handle and are able to use the fast poll mechanism. This will
- * always fail on windows XP/2k3, since they don't support the. SIO_BASE_HANDLE
- * ioctl. */
+  /* Try to obtain a base handle for the socket. This increases this chances
+   * that we find an AFD handle and are able to use the fast poll mechanism. */
 #ifndef NDEBUG
   base_socket = INVALID_SOCKET;
 #endif

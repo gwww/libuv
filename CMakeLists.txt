@@ -1,6 +1,15 @@
 # TODO: determine CMAKE_SYSTEM_NAME on OS/390.  Currently assumes "OS/390".
-cmake_minimum_required(VERSION 2.8.12)
-project(libuv)
+cmake_minimum_required(VERSION 3.4)
+project(libuv LANGUAGES C)
+
+include(CMakePackageConfigHelpers)
+include(CMakeDependentOption)
+include(GNUInstallDirs)
+include(CTest)
+
+cmake_dependent_option(LIBUV_BUILD_TESTS
+  "Build the unit tests when BUILD_TESTING is enabled and we are the root project" ON
+  "BUILD_TESTING;CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR" OFF)
 
 if(MSVC)
   list(APPEND uv_cflags /W4)
@@ -14,6 +23,7 @@ set(uv_sources
     src/fs-poll.c
     src/idna.c
     src/inet.c
+    src/loop-watcher.c
     src/random.c
     src/strscpy.c
     src/threadpool.c
@@ -30,7 +40,9 @@ set(uv_test_sources
     test/test-active.c
     test/test-async-null-cb.c
     test/test-async.c
+    test/test-async-multi.c
     test/test-barrier.c
+    test/test-buf.c
     test/test-callback-order.c
     test/test-callback-stack.c
     test/test-close-fd.c
@@ -73,7 +85,6 @@ set(uv_test_sources
     test/test-idle.c
     test/test-idna.c
     test/test-ip4-addr.c
-    test/test-ip6-addr.c
     test/test-ip6-addr.c
     test/test-ipc-heavy-traffic-deadlock-bug.c
     test/test-ipc-send-recv.c
@@ -152,6 +163,7 @@ set(uv_test_sources
     test/test-tcp-writealot.c
     test/test-thread-equal.c
     test/test-thread.c
+    test/test-thread-affinity.c
     test/test-threadpool-cancel.c
     test/test-threadpool.c
     test/test-timer-again.c
@@ -188,6 +200,7 @@ if(WIN32)
        advapi32
        iphlpapi
        psapi
+       secur32
        shell32
        user32
        userenv
@@ -204,14 +217,12 @@ if(WIN32)
        src/win/getaddrinfo.c
        src/win/getnameinfo.c
        src/win/handle.c
-       src/win/loop-watcher.c
        src/win/pipe.c
        src/win/thread.c
        src/win/poll.c
        src/win/process.c
        src/win/process-stdio.c
        src/win/signal.c
-       src/win/snprintf.c
        src/win/stream.c
        src/win/tcp.c
        src/win/tty.c
@@ -220,7 +231,7 @@ if(WIN32)
        src/win/winapi.c
        src/win/winsock.c)
   list(APPEND uv_test_libraries ws2_32)
-  list(APPEND uv_test_sources src/win/snprintf.c test/runner-win.c)
+  list(APPEND uv_test_sources test/runner-win.c)
 else()
   list(APPEND uv_defines _FILE_OFFSET_BITS=64 _LARGEFILE_SOURCE)
   if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
@@ -236,7 +247,6 @@ else()
        src/unix/fs.c
        src/unix/getaddrinfo.c
        src/unix/getnameinfo.c
-       src/unix/loop-watcher.c
        src/unix/loop.c
        src/unix/pipe.c
        src/unix/poll.c
@@ -270,6 +280,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
        src/unix/linux-syscalls.c
        src/unix/procfs-exepath.c
        src/unix/pthread-fixes.c
+       src/unix/random-getrandom.c
+       src/unix/random-sysctl-linux.c
        src/unix/sysinfo-loadavg.c)
 endif()
 
@@ -315,7 +327,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
        src/unix/linux-syscalls.c
        src/unix/procfs-exepath.c
        src/unix/random-getrandom.c
-       src/unix/random-sysctl.c
+       src/unix/random-sysctl-linux.c
        src/unix/sysinfo-loadavg.c)
 endif()
 
@@ -372,11 +384,7 @@ target_compile_options(uv_a PRIVATE ${uv_cflags})
 target_include_directories(uv_a PUBLIC include PRIVATE src)
 target_link_libraries(uv_a ${uv_libraries})
 
-option(libuv_buildtests "Build the unit tests when BUILD_TESTING is enabled." ON)
-
-include(CTest)
-if(BUILD_TESTING AND libuv_buildtests)
-  enable_testing()
+if(LIBUV_BUILD_TESTS)
   add_executable(uv_run_tests ${uv_test_sources})
   target_compile_definitions(uv_run_tests
                              PRIVATE ${uv_defines} USING_UV_SHARED=1)
@@ -396,7 +404,6 @@ endif()
 
 if(UNIX)
   # Now for some gibbering horrors from beyond the stars...
-  include(GNUInstallDirs)
   foreach(x ${uv_libraries})
     set(LIBS "${LIBS} -l${x}")
   endforeach(x)
@@ -417,4 +424,12 @@ if(UNIX)
           DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
   install(TARGETS uv LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
   install(TARGETS uv_a ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+
+if(WIN32)
+  install(DIRECTORY include/ DESTINATION include)
+  install(FILES LICENSE DESTINATION .)
+  install(TARGETS uv uv_a
+          RUNTIME DESTINATION lib/$<CONFIG>
+          ARCHIVE DESTINATION lib/$<CONFIG>)
 endif()

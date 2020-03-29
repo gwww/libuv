@@ -40,6 +40,7 @@
 #include <sys/uio.h> /* writev */
 #include <sys/resource.h> /* getrusage */
 #include <pwd.h>
+#include <sched.h>
 #include <sys/utsname.h>
 #include <sys/time.h>
 
@@ -71,6 +72,8 @@ extern char** environ;
 # include <sys/sysctl.h>
 # include <sys/filio.h>
 # include <sys/wait.h>
+# include <sys/param.h>
+# include <sys/cpuset.h>
 # if defined(__FreeBSD__) && __FreeBSD__ >= 10
 #  define uv__accept4 accept4
 # endif
@@ -81,9 +84,6 @@ extern char** environ;
       defined(__NetBSD__) || defined(__OpenBSD__)
 #  define UV__SOCK_NONBLOCK SOCK_NONBLOCK
 #  define UV__SOCK_CLOEXEC  SOCK_CLOEXEC
-# endif
-# if !defined(F_DUP2FD_CLOEXEC) && defined(_F_DUP2FD_CLOEXEC)
-#  define F_DUP2FD_CLOEXEC  _F_DUP2FD_CLOEXEC
 # endif
 #endif
 
@@ -100,15 +100,6 @@ extern char** environ;
 #endif
 
 static int uv__run_pending(uv_loop_t* loop);
-
-/* Verify that uv_buf_t is ABI-compatible with struct iovec. */
-STATIC_ASSERT(sizeof(uv_buf_t) == sizeof(struct iovec));
-STATIC_ASSERT(sizeof(&((uv_buf_t*) 0)->base) ==
-              sizeof(((struct iovec*) 0)->iov_base));
-STATIC_ASSERT(sizeof(&((uv_buf_t*) 0)->len) ==
-              sizeof(((struct iovec*) 0)->iov_len));
-STATIC_ASSERT(offsetof(uv_buf_t, base) == offsetof(struct iovec, iov_base));
-STATIC_ASSERT(offsetof(uv_buf_t, len) == offsetof(struct iovec, iov_len));
 
 
 uint64_t uv_hrtime(void) {
@@ -320,7 +311,7 @@ int uv_is_closing(const uv_handle_t* handle) {
 }
 
 
-int uv_backend_fd(const uv_loop_t* loop) {
+uv_os_fd_t uv_backend_fd(const uv_loop_t* loop) {
   return loop->backend_fd;
 }
 
@@ -1184,6 +1175,7 @@ int uv__getpwuid_r(uv_passwd_t* pwd) {
   size_t name_size;
   size_t homedir_size;
   size_t shell_size;
+  size_t gecos_size;
   long initsize;
   int r;
 #if defined(__ANDROID_API__) && __ANDROID_API__ < 21
@@ -1232,11 +1224,24 @@ int uv__getpwuid_r(uv_passwd_t* pwd) {
     return UV_ENOENT;
   }
 
-  /* Allocate memory for the username, shell, and home directory */
+  /* Allocate memory for the username, gecos, shell, and home directory. */
   name_size = strlen(pw.pw_name) + 1;
   homedir_size = strlen(pw.pw_dir) + 1;
   shell_size = strlen(pw.pw_shell) + 1;
-  pwd->username = uv__malloc(name_size + homedir_size + shell_size);
+
+#ifdef __MVS__
+  gecos_size = 0; /* pw_gecos does not exist on zOS. */
+#else
+  if (pw.pw_gecos != NULL)
+    gecos_size = strlen(pw.pw_gecos) + 1;
+  else
+    gecos_size = 0;
+#endif
+
+  pwd->username = uv__malloc(name_size +
+                             homedir_size +
+                             shell_size +
+                             gecos_size);
 
   if (pwd->username == NULL) {
     uv__free(buf);
@@ -1254,6 +1259,18 @@ int uv__getpwuid_r(uv_passwd_t* pwd) {
   pwd->shell = pwd->homedir + homedir_size;
   memcpy(pwd->shell, pw.pw_shell, shell_size);
 
+  /* Copy the gecos field */
+#ifdef __MVS__
+  pwd->gecos = NULL;  /* pw_gecos does not exist on zOS. */
+#else
+  if (pw.pw_gecos == NULL) {
+    pwd->gecos = NULL;
+  } else {
+    pwd->gecos = pwd->shell + shell_size;
+    memcpy(pwd->gecos, pw.pw_gecos, gecos_size);
+  }
+#endif
+
   /* Copy the uid and gid */
   pwd->uid = pw.pw_uid;
   pwd->gid = pw.pw_gid;
@@ -1269,7 +1286,7 @@ void uv_os_free_passwd(uv_passwd_t* pwd) {
     return;
 
   /*
-    The memory for name, shell, and homedir are allocated in a single
+    The memory for name, shell, homedir, and gecos are allocated in a single
     uv__malloc() call. The base of the pointer is stored in pwd->username, so
     that is the field that needs to be freed.
   */
@@ -1277,6 +1294,7 @@ void uv_os_free_passwd(uv_passwd_t* pwd) {
   pwd->username = NULL;
   pwd->shell = NULL;
   pwd->homedir = NULL;
+  pwd->gecos = NULL;
 }
 
 
@@ -1425,14 +1443,6 @@ int uv_os_gethostname(char* buffer, size_t* size) {
 }
 
 
-uv_os_fd_t uv_get_osfhandle(int fd) {
-  return fd;
-}
-
-int uv_open_osfhandle(uv_os_fd_t os_fd) {
-  return os_fd;
-}
-
 uv_pid_t uv_os_getpid(void) {
   return getpid();
 }
@@ -1442,6 +1452,13 @@ uv_pid_t uv_os_getppid(void) {
   return getppid();
 }
 
+int uv_cpumask_size(void) {
+#if defined(__linux__) || defined(__FreeBSD__)
+  return CPU_SETSIZE;
+#else
+  return UV_ENOTSUP;
+#endif
+}
 
 int uv_os_getpriority(uv_pid_t pid, int* priority) {
   int r;
@@ -1560,4 +1577,18 @@ int uv_gettimeofday(uv_timeval64_t* tv) {
   tv->tv_sec = (int64_t) time.tv_sec;
   tv->tv_usec = (int32_t) time.tv_usec;
   return 0;
+}
+
+void uv_sleep(unsigned int msec) {
+  struct timespec timeout;
+  int rc;
+
+  timeout.tv_sec = msec / 1000;
+  timeout.tv_nsec = (msec % 1000) * 1000 * 1000;
+
+  do
+    rc = nanosleep(&timeout, &timeout);
+  while (rc == -1 && errno == EINTR);
+
+  assert(rc == 0);
 }

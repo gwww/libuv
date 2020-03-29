@@ -25,10 +25,9 @@
 #include "uv.h"
 #include "task.h"
 
-uv_os_sock_t sock;
-uv_poll_t handle;
-
 #ifdef _WIN32
+static uv_os_sock_t sock;
+static uv_poll_t handle;
 static int close_cb_called = 0;
 
 
@@ -78,7 +77,7 @@ TEST_IMPL(poll_closesocket) {
   ASSERT(r != 0);
   ASSERT(WSAGetLastError() == WSAEWOULDBLOCK);
 
-  r = uv_poll_init_socket(uv_default_loop(), &handle, sock);
+  r = uv_poll_init(uv_default_loop(), &handle, sock);
   ASSERT(r == 0);
   r = uv_poll_start(&handle, UV_WRITABLE, poll_cb);
   ASSERT(r == 0);

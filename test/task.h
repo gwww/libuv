@@ -27,25 +27,11 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
-
-#if defined(_MSC_VER) && _MSC_VER < 1600
-# include "uv/stdint-msvc2008.h"
-#else
-# include <stdint.h>
-#endif
+#include <stdint.h>
 
 #if !defined(_WIN32)
 # include <sys/time.h>
 # include <sys/resource.h>  /* setrlimit() */
-#endif
-
-#ifdef __clang__
-# pragma clang diagnostic ignored "-Wvariadic-macros"
-# pragma clang diagnostic ignored "-Wc99-extensions"
-#endif
-
-#ifdef __GNUC__
-# pragma GCC diagnostic ignored "-Wvariadic-macros"
 #endif
 
 #define TEST_PORT 9123
@@ -62,7 +48,7 @@
 #endif
 
 #ifdef _WIN32
-# include <io.h>
+# include <sys/stat.h>
 # ifndef S_IRUSR
 #  define S_IRUSR _S_IREAD
 # endif
@@ -131,9 +117,6 @@ typedef enum {
   int run_helper_##name(void);                                                \
   int run_helper_##name(void)
 
-/* Pause the calling thread for a number of milliseconds. */
-void uv_sleep(int msec);
-
 /* Format big numbers nicely. WARNING: leaks memory. */
 const char* fmt(double d);
 
@@ -170,10 +153,6 @@ enum test_status {
 
 # define TEST_FILE_LIMIT(num) do {} while (0)
 
-#endif
-
-#if !defined(snprintf) && defined(_MSC_VER) && _MSC_VER < 1900
-extern int snprintf(char*, size_t, const char*, ...);
 #endif
 
 #if defined(__clang__) ||                                \
@@ -218,7 +197,7 @@ UNUSED static int can_ipv6(void) {
   return supported;
 }
 
-#if defined(__CYGWIN__) || defined(__MSYS__)
+#if defined(__CYGWIN__) || defined(__MSYS__) || defined(__PASE__)
 # define NO_FS_EVENTS "Filesystem watching not supported on this platform."
 #endif
 
@@ -236,6 +215,13 @@ UNUSED static int can_ipv6(void) {
 #elif defined(__CYGWIN__)
 # define NO_SELF_CONNECT \
   "Cygwin runtime hangs on listen+connect in same process."
+#endif
+
+#if !defined(__linux__) && \
+    !defined(__FreeBSD__) && \
+    !defined(_WIN32)
+# define NO_CPU_AFFINITY \
+  "affinity not supported on this platform."
 #endif
 
 #endif /* TASK_H_ */

@@ -74,6 +74,7 @@
         'src/idna.c',
         'src/idna.h',
         'src/inet.c',
+        'src/loop-watcher.c',
         'src/queue.h',
         'src/random.c',
         'src/strscpy.c',
@@ -93,7 +94,7 @@
           '-Wno-unused-parameter',
           '-Wstrict-prototypes',
         ],
-        'OTHER_CFLAGS': [ '-g', '--std=gnu89', '-pedantic' ],
+        'OTHER_CFLAGS': [ '-g', '--std=gnu89' ],
       },
       'conditions': [
         [ 'OS=="win"', {
@@ -104,7 +105,6 @@
           'sources': [
             'include/uv/win.h',
             'src/win/async.c',
-            'src/win/atomicops-inl.h',
             'src/win/core.c',
             'src/win/detect-wakeup.c',
             'src/win/device.c,
@@ -117,7 +117,6 @@
             'src/win/handle.c',
             'src/win/handle-inl.h',
             'src/win/internal.h',
-            'src/win/loop-watcher.c',
             'src/win/pipe.c',
             'src/win/thread.c',
             'src/win/poll.c',
@@ -125,7 +124,6 @@
             'src/win/process-stdio.c',
             'src/win/req-inl.h',
             'src/win/signal.c',
-            'src/win/snprintf.c',
             'src/win/stream.c',
             'src/win/stream-inl.h',
             'src/win/tcp.c',
@@ -143,6 +141,7 @@
               '-liphlpapi',
               '-lpsapi',
               '-lshell32',
+              '-lsecur32',
               '-luser32',
               '-luserenv',
               '-lws2_32'
@@ -166,7 +165,6 @@
             'src/unix/getnameinfo.c',
             'src/unix/internal.h',
             'src/unix/loop.c',
-            'src/unix/loop-watcher.c',
             'src/unix/pipe.c',
             'src/unix/poll.c',
             'src/unix/process.c',
@@ -207,7 +205,7 @@
               # This will cause gyp to set soname
               # Must correspond with UV_VERSION_MAJOR
               # in include/uv/version.h
-              'product_extension': 'so.1',
+              'product_extension': 'so.2',
             }],
           ],
         }],
@@ -218,8 +216,7 @@
           'cflags': [
             '-fvisibility=hidden',
             '-g',
-            '--std=gnu89',
-            '-pedantic',
+            '--std=gnu99',
             '-Wall',
             '-Wextra',
             '-Wno-unused-parameter',
@@ -247,7 +244,7 @@
             'src/unix/linux-syscalls.h',
             'src/unix/procfs-exepath.c',
             'src/unix/random-getrandom.c',
-            'src/unix/random-sysctl.c',
+            'src/unix/random-sysctl-linux.c',
             'src/unix/sysinfo-loadavg.c',
           ],
           'link_settings': {
@@ -263,8 +260,9 @@
             'src/unix/pthread-fixes.c',
             'src/unix/android-ifaddrs.c',
             'src/unix/procfs-exepath.c',
+            'src/unix/random-getrandom.c',
+            'src/unix/random-sysctl-linux.c',
             'src/unix/sysinfo-loadavg.c',
-            'src/unix/sysinfo-memory.c',
           ],
           'link_settings': {
             'libraries': [ '-ldl' ],
@@ -277,7 +275,7 @@
           ],
           'defines': [
             '__EXTENSIONS__',
-            '_XOPEN_SOURCE=500',
+            '_XOPEN_SOURCE=600',
           ],
           'link_settings': {
             'libraries': [

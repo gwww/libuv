@@ -28,12 +28,13 @@ CLEANFILES =
 
 lib_LTLIBRARIES = libuv.la
 libuv_la_CFLAGS = @CFLAGS@
-libuv_la_LDFLAGS = -no-undefined -version-info 1:0:0
+libuv_la_LDFLAGS = -no-undefined -version-info 2:0:0
 libuv_la_SOURCES = src/fs-poll.c \
                    src/heap-inl.h \
                    src/idna.c \
                    src/idna.h \
                    src/inet.c \
+                   src/loop-watcher.c \
                    src/queue.h \
                    src/random.c \
                    src/strscpy.c \
@@ -58,7 +59,6 @@ AM_CPPFLAGS += -I$(top_srcdir)/src/win \
                -DWIN32_LEAN_AND_MEAN \
                -D_WIN32_WINNT=0x0600
 libuv_la_SOURCES += src/win/async.c \
-                    src/win/atomicops-inl.h \
                     src/win/core.c \
                     src/win/detect-wakeup.c \
                     src/win/device.c \
@@ -71,7 +71,6 @@ libuv_la_SOURCES += src/win/async.c \
                     src/win/handle.c \
                     src/win/handle-inl.h \
                     src/win/internal.h \
-                    src/win/loop-watcher.c \
                     src/win/pipe.c \
                     src/win/poll.c \
                     src/win/process-stdio.c \
@@ -103,7 +102,6 @@ libuv_la_SOURCES += src/unix/async.c \
                    src/unix/getaddrinfo.c \
                    src/unix/getnameinfo.c \
                    src/unix/internal.h \
-                   src/unix/loop-watcher.c \
                    src/unix/loop.c \
                    src/unix/pipe.c \
                    src/unix/poll.c \
@@ -125,7 +123,6 @@ EXTRA_DIST = test/fixtures/empty_file \
              include \
              docs \
              img \
-             samples \
              android-configure-arm \
              android-configure-arm64 \
              android-configure-x86 \
@@ -142,11 +139,7 @@ EXTRA_DIST = test/fixtures/empty_file \
 
 TESTS = test/run-tests
 check_PROGRAMS = test/run-tests
-if OS390
 test_run_tests_CFLAGS =
-else
-test_run_tests_CFLAGS = -Wno-long-long
-endif
 
 if SUNOS
 # Can't be turned into a CC_CHECK_CFLAGS in configure.ac, it makes compilers
@@ -164,8 +157,10 @@ test_run_tests_SOURCES = test/blackhole-server.c \
                          test/task.h \
                          test/test-active.c \
                          test/test-async.c \
+                         test/test-async-multi.c \
                          test/test-async-null-cb.c \
                          test/test-barrier.c \
+                         test/test-buf.c \
                          test/test-callback-order.c \
                          test/test-callback-stack.c \
                          test/test-close-fd.c \
@@ -287,6 +282,7 @@ test_run_tests_SOURCES = test/blackhole-server.c \
                          test/test-tcp-write-queue-order.c \
                          test/test-thread-equal.c \
                          test/test-thread.c \
+                         test/test-thread-affinity.c \
                          test/test-threadpool-cancel.c \
                          test/test-threadpool.c \
                          test/test-timer-again.c \
@@ -348,7 +344,7 @@ endif
 
 if SUNOS
 test_run_tests_CFLAGS += -D__EXTENSIONS__ \
-                         -D_XOPEN_SOURCE=500 \
+                         -D_XOPEN_SOURCE=600 \
                          -D_REENTRANT
 endif
 
@@ -394,7 +390,14 @@ endif
 if ANDROID
 uvinclude_HEADERS += include/uv/android-ifaddrs.h
 libuv_la_SOURCES += src/unix/android-ifaddrs.c \
-                    src/unix/pthread-fixes.c
+                    src/unix/linux-core.c \
+                    src/unix/linux-inotify.c \
+                    src/unix/linux-syscalls.c \
+                    src/unix/procfs-exepath.c \
+                    src/unix/pthread-fixes.c \
+                    src/unix/random-getrandom.c \
+                    src/unix/random-sysctl-linux.c \
+                    src/unix/sysinfo-loadavg.c
 endif
 
 if CYGWIN
@@ -474,7 +477,7 @@ libuv_la_SOURCES += src/unix/linux-core.c \
                     src/unix/procfs-exepath.c \
                     src/unix/proctitle.c \
                     src/unix/random-getrandom.c \
-                    src/unix/random-sysctl.c \
+                    src/unix/random-sysctl-linux.c \
                     src/unix/sysinfo-loadavg.c
 test_run_tests_LDFLAGS += -lutil
 endif
@@ -516,7 +519,7 @@ endif
 if SUNOS
 uvinclude_HEADERS += include/uv/sunos.h
 libuv_la_CFLAGS += -D__EXTENSIONS__ \
-                   -D_XOPEN_SOURCE=500 \
+                   -D_XOPEN_SOURCE=600 \
                    -D_REENTRANT
 libuv_la_SOURCES += src/unix/no-proctitle.c \
                     src/unix/sunos.c

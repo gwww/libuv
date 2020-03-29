@@ -24,22 +24,11 @@
 #include <malloc.h>
 #include <stdio.h>
 #include <process.h>
-#if !defined(__MINGW32__)
-# include <crtdbg.h>
-#endif
+#include <crtdbg.h>
 
 
 #include "task.h"
 #include "runner.h"
-
-
-/*
- * Define the stuff that MinGW doesn't have
- */
-#ifndef GetFileSizeEx
-  WINBASEAPI BOOL WINAPI GetFileSizeEx(HANDLE hFile,
-                                       PLARGE_INTEGER lpFileSize);
-#endif
 
 
 /* Do platform-specific initialization. */
@@ -47,11 +36,11 @@ int platform_init(int argc, char **argv) {
   /* Disable the "application crashed" popup. */
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
       SEM_NOOPENFILEERRORBOX);
-#if !defined(__MINGW32__)
   _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_DEBUG);
   _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
-#endif
 
+  /* make output mode sane */
+  _fmode = _O_BINARY;
   _setmode(0, _O_BINARY);
   _setmode(1, _O_BINARY);
   _setmode(2, _O_BINARY);
@@ -222,28 +211,19 @@ long int process_output_size(process_info_t *p) {
 int process_copy_output(process_info_t* p, FILE* stream) {
   char buf[1024];
   int fd, r;
-  FILE* f;
 
   fd = _open_osfhandle((intptr_t)p->stdio_out, _O_RDONLY | _O_TEXT);
   if (fd == -1)
     return -1;
-  f = _fdopen(fd, "rt");
-  if (f == NULL) {
-    _close(fd);
-    return -1;
-  }
 
-  r = fseek(f, 0, SEEK_SET);
+  r = _lseek(fd, 0, SEEK_SET);
   if (r < 0)
     return -1;
 
-  while (fgets(buf, sizeof(buf), f) != NULL)
-    print_lines(buf, strlen(buf), stream);
+  while ((r = _read(fd, buf, sizeof(buf))) != 0)
+    print_lines(buf, r, stream);
 
-  if (ferror(f))
-    return -1;
-
-  fclose(f);
+  _close(fd);
   return 0;
 }
 
@@ -354,10 +334,4 @@ void rewind_cursor() {
     /* If clear_line fails (stdout is not a console), print a newline. */
     fprintf(stderr, "\n");
   }
-}
-
-
-/* Pause the calling thread for a number of milliseconds. */
-void uv_sleep(int msec) {
-  Sleep(msec);
 }

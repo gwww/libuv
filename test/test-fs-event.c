@@ -25,6 +25,10 @@
 #include <string.h>
 #include <fcntl.h>
 
+#if defined(__APPLE__) && !TARGET_OS_IPHONE
+# include <AvailabilityMacros.h>
+#endif
+
 #ifndef HAVE_KQUEUE
 # if defined(__APPLE__) ||                                                    \
      defined(__DragonFly__) ||                                                \
@@ -80,12 +84,12 @@ static void create_dir(const char* name) {
 
 static void create_file(const char* name) {
   int r;
-  uv_file file;
+  uv_os_fd_t file;
   uv_fs_t req;
 
   r = uv_fs_open(NULL, &req, name, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR, NULL);
-  ASSERT(r >= 0);
-  file = r;
+  ASSERT(r == 0);
+  file = (uv_os_fd_t)req.result;
   uv_fs_req_cleanup(&req);
   r = uv_fs_close(NULL, &req, file, NULL);
   ASSERT(r == 0);
@@ -94,13 +98,13 @@ static void create_file(const char* name) {
 
 static void touch_file(const char* name) {
   int r;
-  uv_file file;
+  uv_os_fd_t file;
   uv_fs_t req;
   uv_buf_t buf;
 
   r = uv_fs_open(NULL, &req, name, O_RDWR, 0, NULL);
-  ASSERT(r >= 0);
-  file = r;
+  ASSERT(r == 0);
+  file = (uv_os_fd_t)req.result;
   uv_fs_req_cleanup(&req);
 
   buf = uv_buf_init("foo", 4);
@@ -634,6 +638,7 @@ TEST_IMPL(fs_event_watch_file_exact_path) {
    * versions. Give a long delay here to let the system settle before running
    * the test. */
   uv_sleep(1100);
+  uv_update_time(loop);
 #endif
 
   r = uv_fs_event_init(loop, &fs_event);
@@ -699,6 +704,7 @@ TEST_IMPL(fs_event_watch_file_current_dir) {
    * create_file events prior to macOS 10.11.6 in the subsequent fs_event_start
    * So let the system settle before running the test. */
   uv_sleep(1100);
+  uv_update_time(loop);
 #endif
 
   r = uv_fs_event_init(loop, &fs_event);

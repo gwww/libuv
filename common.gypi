@@ -35,7 +35,7 @@
         },
         'conditions': [
           ['OS != "zos"', {
-            'cflags': [ '-O0', '-fwrapv' ]
+            'cflags': [ '-O0', '-fno-common', '-fwrapv' ]
           }],
           ['OS == "android"', {
             'cflags': [ '-fPIE' ],
@@ -80,9 +80,10 @@
         'conditions': [
           ['OS != "zos"', {
             'cflags': [
-              '-fomit-frame-pointer',
               '-fdata-sections',
               '-ffunction-sections',
+              '-fno-common',
+              '-fomit-frame-pointer',
             ],
           }],
         ]
@@ -158,7 +159,7 @@
             'cflags': [ '-pthreads' ],
             'ldflags': [ '-pthreads' ],
           }],
-          [ 'OS not in "solaris android zos"', {
+          [ 'OS not in "solaris android"', {
             'cflags': [ '-pthread' ],
             'ldflags': [ '-pthread' ],
           }],
@@ -206,6 +207,10 @@
        'cflags': [ '-fno-omit-frame-pointer' ],
        # pull in V8's postmortem metadata
        'ldflags': [ '-Wl,-z,allextract' ]
+     }],
+     ['OS=="zos"', {
+       'cflags': [ '-qlanglvl=extc99', '-qxplink' ],
+       'ldflags': [ '-qxplink' ],
      }],
     ],
   },
