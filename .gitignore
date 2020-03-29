@@ -58,7 +58,6 @@ test_file_*
 *.ncb
 *.vcproj
 *.vcproj*.user
-*.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
 _UpgradeReport_Files/
